@@ -6,15 +6,20 @@
   <meta name="renderer" content="webkit">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" >
   <link rel="dns-prefetch" href="http://yoursite.com">
-  <title>Archives: 2017/11 | iOS笔记</title>
+  <title>performSelector 造成内存泄漏的原因 | iOS笔记</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta property="og:type" content="website">
-<meta property="og:title" content="iOS笔记">
-<meta property="og:url" content="http://yoursite.com/archives/2017/11/index.html">
+  <meta name="description" content="在很多优秀的开源库中，我们可以看到，开源作者们在ARC模式下使用performSelector系列方法时候，会加入避免Xcode警告的编译器指令。 1234#pragma clang diagnostic push#pragma clang diagnostic ignored &quot;-Warc-performS">
+<meta name="keywords" content="iOS">
+<meta property="og:type" content="article">
+<meta property="og:title" content="performSelector 造成内存泄漏的原因">
+<meta property="og:url" content="http://yoursite.com/2017/11/23/performSelector-造成内存泄漏的原因/index.html">
 <meta property="og:site_name" content="iOS笔记">
+<meta property="og:description" content="在很多优秀的开源库中，我们可以看到，开源作者们在ARC模式下使用performSelector系列方法时候，会加入避免Xcode警告的编译器指令。 1234#pragma clang diagnostic push#pragma clang diagnostic ignored &quot;-Warc-performSelector-leaks&quot;    return [target performSelec">
 <meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2017-11-24T07:46:15.000Z">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="iOS笔记">
+<meta name="twitter:title" content="performSelector 造成内存泄漏的原因">
+<meta name="twitter:description" content="在很多优秀的开源库中，我们可以看到，开源作者们在ARC模式下使用performSelector系列方法时候，会加入避免Xcode警告的编译器指令。 1234#pragma clang diagnostic push#pragma clang diagnostic ignored &quot;-Warc-performSelector-leaks&quot;    return [target performSelec">
   
     <link rel="alternative" href="/atom.xml" title="iOS笔记" type="application/atom+xml">
   
@@ -126,36 +131,73 @@
             <canvas data-colors="#eaeaea" data-sectionHeight="100" data-contentId="js-content" id="myCanvas1" class="anm-canvas"></canvas>
           </div>
           <div id="js-content" class="content-ll">
-            
-  
-  
+            <article id="post-performSelector-造成内存泄漏的原因" class="article article-type-post " itemscope itemprop="blogPost">
+  <div class="article-inner">
     
-    
-      
-      
-      <section class="archives-wrap">
-        <div class="archive-year-wrap">
-          <a href="/archives/2017" class="archive-year">2017</a>
-        </div>
-        <div class="archives">
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2017/11/23/performSelector-造成内存泄漏的原因/" class="archive-article-date">
-  	<time datetime="2017-11-23T10:12:48.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2017-11-23</time>
-</a>
-        </div>
-    	 
+      <header class="article-header">
+        
   
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2017/11/23/performSelector-造成内存泄漏的原因/">performSelector 造成内存泄漏的原因</a>
+    <h1 class="article-title" itemprop="name">
+      performSelector 造成内存泄漏的原因
     </h1>
   
 
-        <div class="article-info info-on-right">
-          
+        
+        <a href="/2017/11/23/performSelector-造成内存泄漏的原因/" class="archive-article-date">
+  	<time datetime="2017-11-23T10:12:48.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2017-11-23</time>
+</a>
+        
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>在很多优秀的开源库中，我们可以看到，开源作者们在ARC模式下使用performSelector系列方法时候，会加入避免Xcode警告的编译器指令。</p>
+<figure class="highlight objc"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#pragma clang diagnostic push</span></span><br><span class="line"><span class="meta">#pragma clang diagnostic ignored <span class="meta-string">"-Warc-performSelector-leaks"</span></span></span><br><span class="line">    <span class="keyword">return</span> [target performSelector:action withObject:params];</span><br><span class="line"><span class="meta">#pragma clang diagnostic pop</span></span><br></pre></td></tr></table></figure>
+<p>因为，performSelector系列方法不是在任何场景下，都会出现内存泄漏的问题。所以Xcode给出这个警告，也是为了提醒开发者。但是，在我们写程序时，如果很确定自己的使用场景不会造成任何泄漏风险时，这个警告也就略显多余了。<br>如果我们在不知道泄漏原因，而到处使用-Warc-performSelector-leaks，那样苹果爸爸的用心良苦也就毫无作用了。苦逼的你，也只能加班找这个Bug～😢</p>
+<h2 id="泄漏原因"><a href="#泄漏原因" class="headerlink" title="泄漏原因"></a>泄漏原因</h2><p>为了弄清泄漏的原因，我们需要先温习下ARC模式,<a href="https://stackoverflow.com/questions/7017281/performselector-may-cause-a-leak-because-its-selector-is-unknown" target="_blank" rel="noopener">clang文档</a>有详细说明,ARC在处理函数返回值，可以分为四种情况：</p>
+<ol>
+<li>对于void,int(值类型，C指针)等不做任何处理</li>
+<li>释放new object 当不在使用的时候(一般都在函数作用域结束时), 这是针对例如:init／copy/mutableCopy/new等系列方法</li>
+<li>对于放回值所在函数有autoreleasepool包裹的，无需任何处理</li>
+<li>Retain object value,在对象快出作用域时候realse,其它函数</li>
+</ol>
+<hr>
+<p>温习了ARC的模式，可以知道ARC其实是在编译期进行引用计数的控制～由于performSelector属于运行时的方法调用，编译期完全不知道调用哪个具体方法，也就更不可能知道这个方法的签名。在这种情况下，ARC得不到返回值类型信息，所以苹果爸爸就对这种调用不做任何处理。现在，内存泄漏的面纱也就一点点的揭开了！</p>
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>理清了ARC模式下函数返回值的处理方式，我们就清楚，在使用performSelector时候。如果你的selector会返回ARC管理下的对象时，就要慎重考虑自己的代码。</p>
+
+      
+
+      
+        <div class="page-reward">
+          <a href="javascript:;" class="page-reward-btn tooltip-top">
+            <div class="tooltip tooltip-east">
+            <span class="tooltip-item">
+              赏
+            </span>
+            <span class="tooltip-content">
+              <span class="tooltip-text">
+                <span class="tooltip-inner">
+                  <p class="reward-p"><i class="icon icon-quo-left"></i>给点辛苦费<i class="icon icon-quo-right"></i></p>
+                  <div class="reward-box">
+                    
+                    <div class="reward-box-item">
+                      <img class="reward-img" src="/assets/alipay.png">
+                      <span class="reward-type">支付宝</span>
+                    </div>
+                    
+                    
+                  </div>
+                </span>
+              </span>
+            </span>
+          </div>
+          </a>
+        </div>
+      
+    </div>
+    <div class="article-info article-info-index">
+      
+      
 	<div class="article-tag tagcloud">
 		<i class="icon-price-tags icon"></i>
 		<ul class="article-tag-list">
@@ -167,19 +209,96 @@
 		</ul>
 	</div>
 
-          
+      
 
+      
+
+      
+        
+<div class="share-btn share-icons tooltip-left">
+  <div class="tooltip tooltip-east">
+    <span class="tooltip-item">
+      <a href="javascript:;" class="share-sns share-outer">
+        <i class="icon icon-share"></i>
+      </a>
+    </span>
+    <span class="tooltip-content">
+      <div class="share-wrap">
+        <div class="share-icons">
+          <a class="weibo share-sns" href="javascript:;" data-type="weibo">
+            <i class="icon icon-weibo"></i>
+          </a>
+          <a class="weixin share-sns wxFab" href="javascript:;" data-type="weixin">
+            <i class="icon icon-weixin"></i>
+          </a>
+          <a class="qq share-sns" href="javascript:;" data-type="qq">
+            <i class="icon icon-qq"></i>
+          </a>
+          <a class="douban share-sns" href="javascript:;" data-type="douban">
+            <i class="icon icon-douban"></i>
+          </a>
+          <a class="qzone share-sns" href="javascript:;" data-type="qzone">
+            <i class="icon icon-qzone"></i>
+          </a>
+          <a class="facebook share-sns" href="javascript:;" data-type="facebook">
+            <i class="icon icon-facebook"></i>
+          </a>
+          <a class="twitter share-sns" href="javascript:;" data-type="twitter">
+            <i class="icon icon-twitter"></i>
+          </a>
+          <a class="google share-sns" href="javascript:;" data-type="google">
+            <i class="icon icon-google"></i>
+          </a>
         </div>
-        <div class="clearfix"></div>
-    </header>
+      </div>
+    </span>
+  </div>
+</div>
+
+<div class="page-modal wx-share js-wx-box">
+    <a class="close js-modal-close" href="javascript:;"><i class="icon icon-close"></i></a>
+    <p>扫一扫，分享到微信</p>
+    <div class="wx-qrcode">
+      <img src="//pan.baidu.com/share/qrcode?url=http://yoursite.com/2017/11/23/performSelector-造成内存泄漏的原因/" alt="微信分享二维码">
+    </div>
+</div>
+
+<div class="mask js-mask"></div>
+      
+      <div class="clearfix"></div>
+    </div>
   </div>
 </article>
-  
-  
-    </div></section>
+
   
 
-    
+<aside class="wrap-side-operation">
+    <div class="mod-side-operation">
+        
+        <div class="jump-container" id="js-jump-container" style="display:none;">
+            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
+                <i class="icon-font icon-back"></i>
+            </a>
+            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
+                <i class="icon-font icon-plane jump-plane"></i>
+            </div>
+        </div>
+        
+        
+    </div>
+</aside>
+
+
+
+  
+  
+  
+
+  
+
+  
+
+  
 
 
           </div>
@@ -202,8 +321,8 @@
 	var yiliaConfig = {
 		mathjax: false,
 		isHome: false,
-		isPost: false,
-		isArchive: true,
+		isPost: true,
+		isArchive: false,
 		isTag: false,
 		isCategory: false,
 		open_in_new: false,
