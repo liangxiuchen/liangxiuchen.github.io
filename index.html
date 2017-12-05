@@ -128,6 +128,96 @@
           <div id="js-content" class="content-ll">
             
   
+    <article id="post-dispatch-once源码分析一" class="article article-type-post  article-index" itemscope itemprop="blogPost">
+  <div class="article-inner">
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2017/12/05/dispatch-once源码分析一/">dispatch_once源码分析一</a>
+    </h1>
+  
+
+        
+        <a href="/2017/12/05/dispatch-once源码分析一/" class="archive-article-date">
+  	<time datetime="2017-12-05T01:42:23.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2017-12-05</time>
+</a>
+        
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>最近，在学习GCD源码部分，咋一看感觉dispath_once部分内容少点，于是想着先来捏个软柿子。诶～人艰不拆啊！现在发现GCD部分都是精华，并无软柿子。人贵坚持，曾经看过一篇博文，作者写到技术的成长从来不是一蹴而就，知识体系的庞大到让你感觉自己就是一个无知者，即使你已经在苦海中遨游许久。但是，请你不要惧怕无知，因为你的无知，所以你在进步。首先，自己浏览了一遍dispatch_once实现的源代码，发现好多宏，都不知道具体含义。即使，自己也正在回顾汇编和体系结构相关内容。于是乎，Google了一下，<a href="http://www.dreamingwish.com/article/gcd-guide-dispatch-once-1.html" target="_blank" rel="noopener">GCD外传：dispatch_once(上中下)</a>写的真心好。仔细研读后，写下学习笔记，补充解释下一些作者未提及的细节。所以请大家读完后，如果有哪里没解释仔细的，也可以再阅读参考文章。同时，我也会把参考的文章链接，放在最后的引用部分。</p>
+<h2 id="dispatch-once宏解密"><a href="#dispatch-once宏解密" class="headerlink" title="dispatch_once宏解密"></a>dispatch_once宏解密</h2><p>当我们在使用dispatch_once的时候，不知道，大家有没有点击进去看过这个宏的具体实现。其实这个宏的里面就有好多精华。</p>
+<figure class="highlight objc"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//删除了一些干扰</span></span><br><span class="line"><span class="meta">#define dispatch_once _dispatch_once</span></span><br><span class="line"></span><br><span class="line">DISPATCH_INLINE DISPATCH_ALWAYS_INLINE DISPATCH_NONNULL_ALL DISPATCH_NOTHROW</span><br><span class="line"><span class="keyword">void</span> _<span class="built_in">dispatch_once</span>(<span class="built_in">dispatch_once_t</span> *predicate,</span><br><span class="line">        DISPATCH_NOESCAPE dispatch_block_t block)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">if</span> (DISPATCH_EXPECT(*predicate, ~<span class="number">0</span>l) != ~<span class="number">0</span>l) &#123;</span><br><span class="line">        <span class="built_in">dispatch_once</span>(predicate, block);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        dispatch_compiler_barrier();</span><br><span class="line">    &#125;</span><br><span class="line">    DISPATCH_COMPILER_CAN_ASSUME(*predicate == ~<span class="number">0</span>l);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ol>
+<li>它是定义在once.h中的内联函数。解释下，内联函数的好处就是减少了函数调用的时间开销，现在CUP都是管线化了，编译器会把内联函数的指令直接插入到调用发生的地方。</li>
+<li>DISPATCH_NOESCAPE宏，其对应的是swift的非逃逸闭包，在闭包内无需使用self，为了编程安全。具体细节可以参考swift官方文档。</li>
+<li>DISPATCH_EXPECT(<code>*predicate</code>, ~0l)宏，它是提示编译器<code>*predicate</code> == ~0l的概率很大，涉及到CUP指令预测，缓存，管线化，乱序执行等优化。其中<code>~0l</code>的值为-1。以一个Byte,0000 0000L为例，首先，后缀l表明其为long类型，注意不是ul，所以最高位为符号位。～为按位取反，结果为1111 1111L。此时，符号位为1，指明其为负数。基本功就在这了，计算机中负数是用补码表示的。所以计算机认为1111。 1111L为某个负数的补码。这样，我们符号位不动，其它按位取反加一来计算出这个负数,其值就是-1。</li>
+<li>dispatch_compiler_barrier宏位内存栅栏，作用：内存屏障之前的所有写操作都要写入内存；内存屏障之后的读操作都可以获得同步屏障之前的写操作的结果。因此，对于敏感的程序块，写操作之后、读操作之前可以插入内存屏障，具体解释可以看<a href="https://zh.wikipedia.org/wiki/%E5%86%85%E5%AD%98%E5%B1%8F%E9%9A%9C" target="_blank" rel="noopener">wiki</a>。</li>
+<li>DISPATCH_COMPILER_CAN_ASSUME宏,可以参考<a href="https://clang.llvm.org/docs/LanguageExtensions.html" target="_blank" rel="noopener">clang文档</a>。<h2 id="cpu的分支预测和预执行"><a href="#cpu的分支预测和预执行" class="headerlink" title="cpu的分支预测和预执行"></a>cpu的分支预测和预执行</h2>流水线特性使得CPU能更快地执行线性指令序列，但是当遇到条件判断分支时，麻烦来了，在判定语句返回结果之前，cpu不知道该执行哪个分支，那就得等着（术语叫做pipeline stall），这怎么能行呢，所以，CPU会进行预执行，cpu先猜测一个可能的分支，然后开始执行分支中的指令。现代CPU一般都能做到超过90%的猜测命中率，这可比NBA选手发球命中率高多了。然后当判定语句返回，加入cpu猜错分支，那么之前进行的执行都会被抛弃，然后从正确的分支重新开始执行。<br>在dispatch_once中，唯一一个判断分支就是predicate，dispatch_once会让CPU预执行条件不成立的分支，这样可以大大提升函数执行速度。但是这样的预执行导致的结果是使用了未初始化的obj并将函数返回，这显然不是预期结果。<h2 id="不对称barrier"><a href="#不对称barrier" class="headerlink" title="不对称barrier"></a>不对称barrier</h2>编写barrier时，应该是对称的，在写入端，要有一个barrier来保证顺序写入，同时，在读取端，也要有一个barrier来保证顺序读取。但是，我们的dispatch_once实现要求写入端快不快无所谓，而读取端尽可能的快。所以，我们要解决前述的预执行引起的问题。<br>当一个预执行最终被发现是错误的猜测时，所有的预执行状态以及结果都会被清除，然后cpu会从判断分支处重新执行正确的分支，也就意味着被读取的未初始化的obj也会被抛弃，然后读取。假如dispatch_once能做到在执行完block并正确赋值给obj后，告诉其它cpu核心：你们这群无知的cpu啊，你们刚才都猜错了！然后这群“无知的cpu”就会重新从分支处开始执行，进而获取正确的obj值并返回。<br>从最早的预执行到条件判断语句最终结果被计算出来，这之间有很长时间（记作Ta），具体多长取决于cpu的设计，但是不论如何，这个时间最多几十圈cpu时钟时间，假如写入端能在【初始化并写入obj】与【置predicate值】之间等待足够长的时间Tb使得Tb大于等于Ta，那问题就都解决了。<blockquote>
+<p>如果觉得这个”解决”难以理解，那么反过来思考，假如Tb小于Ta，那么Tb就有可能被Ta完全包含，也就<br>是说，另一个线程B（耗时为Ta）在预执行读取了未初始化的obj值之后，回过头来确认猜测正确性时，<br>predicate可能被执行block的线程A置为了“完成”，这就导致线程B认为自己的预执行有效（实际上它<br>读取了未初始化的值）。而假如Tb大于等于Ta，任何读取了未初始化的obj值的预执行都会被判定为未<br>命中，从而进入内层dispatch_once而进行等待。</p>
+</blockquote>
+</li>
+</ol>
+<p>要保证足够的等待时间，需要一些trick。在intel的CPU上，dispatch_once动用了cpuid指令来达成这个目的。cpuid本来是用作取得cpu的信息，但是这个指令也同时强制将指令流串行化，并且这个指令是需要比较长的执行时间的（在某些cpu上，甚至需要几百圈cpu时钟），这个时间Tc足够超过Ta了<br>查看dispatch_once读取端代码片段<br><figure class="highlight objc"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">DISPATCH_INLINE DISPATCH_ALWAYS_INLINE DISPATCH_NONNULL_ALL DISPATCH_NOTHROW</span><br><span class="line"><span class="keyword">void</span></span><br><span class="line">_<span class="built_in">dispatch_once</span>(<span class="built_in">dispatch_once_t</span> *predicate, dispatch_block_t block)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">if</span> (DISPATCH_EXPECT(*predicate, ~<span class="number">0</span>l) != ~<span class="number">0</span>l) &#123;</span><br><span class="line">        <span class="built_in">dispatch_once</span>(predicate, block);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>没有barrier，并且这个代码是在头文件中的，是强制inline的，DISPATCH_EXPECT是用来告诉cpu *predicate等于~0l是更有可能的判定结果，这就使得cpu能猜测到更正确的分支，并提高效率，最重要的是，这一句是个简单的if判定语句，负载无限接近benchmark。<br>在写入端，dispatch_once在执行了block之后，会调用dispatch_atomic_maximally_synchronizing_barrier();宏函数，在intel处理器上，这个函数编译出的是cpuid指令，在其他厂商处理器上，这个宏函数编译出的是合适的其它指令。<br>如此一来，dispatch_once就保证了场景#3的执行速度无限接近benchmark，实现了写入端的最低负载。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>整体内容，很值得细细推敲，认真研读。就我个人而言，研究下来收获还挺多了的。对于，多线程编程，我们也可以用到，这些宏来优化自身代码。下一篇，将会分析dispatch_once函数的具体实现</p>
+<h2 id="引用"><a href="#引用" class="headerlink" title="引用"></a>引用</h2><p>GCD外传：<a href="http://www.dreamingwish.com/article/gcd-guide-dispatch-once-1.html" target="_blank" rel="noopener">http://www.dreamingwish.com/article/gcd-guide-dispatch-once-1.html</a></p>
+
+      
+
+      
+    </div>
+    <div class="article-info article-info-index">
+      
+      
+	<div class="article-tag tagcloud">
+		<i class="icon-price-tags icon"></i>
+		<ul class="article-tag-list">
+			 
+        		<li class="article-tag-list-item">
+        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">iOS</a>
+        		</li>
+      		
+		</ul>
+	</div>
+
+      
+
+      
+        <p class="article-more-link">
+          <a class="article-more-a" href="/2017/12/05/dispatch-once源码分析一/">展开全文 >></a>
+        </p>
+      
+
+      
+      <div class="clearfix"></div>
+    </div>
+  </div>
+</article>
+
+<aside class="wrap-side-operation">
+    <div class="mod-side-operation">
+        
+        <div class="jump-container" id="js-jump-container" style="display:none;">
+            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
+                <i class="icon-font icon-back"></i>
+            </a>
+            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
+                <i class="icon-font icon-plane jump-plane"></i>
+            </div>
+        </div>
+        
+        
+    </div>
+</aside>
+
+
+
+
+  
     <article id="post-synchronized内部解析" class="article article-type-post  article-index" itemscope itemprop="blogPost">
   <div class="article-inner">
     
