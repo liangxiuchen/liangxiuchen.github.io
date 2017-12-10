@@ -6,15 +6,20 @@
   <meta name="renderer" content="webkit">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" >
   <link rel="dns-prefetch" href="http://yoursite.com">
-  <title>Tag: iOS | iOS笔记</title>
+  <title>dispatch_once源码分析二 | iOS笔记</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta property="og:type" content="website">
-<meta property="og:title" content="iOS笔记">
-<meta property="og:url" content="http://yoursite.com/tags/iOS/index.html">
+  <meta name="description" content="不知道，大家还记得if分支中的dispatch_once函数。如果没有看过上篇dispatch_once源码分析一，希望大家看我源码分析一后，再看这篇。首先，once.m中一共就两个函数。一个是dispatch_once，另一个是dispatch_once_f。其中dispatch_once内部把block转换成函数然">
+<meta name="keywords" content="iOS">
+<meta property="og:type" content="article">
+<meta property="og:title" content="dispatch_once源码分析二">
+<meta property="og:url" content="http://yoursite.com/2017/12/08/dispatch-once源码分析二/index.html">
 <meta property="og:site_name" content="iOS笔记">
+<meta property="og:description" content="不知道，大家还记得if分支中的dispatch_once函数。如果没有看过上篇dispatch_once源码分析一，希望大家看我源码分析一后，再看这篇。首先，once.m中一共就两个函数。一个是dispatch_once，另一个是dispatch_once_f。其中dispatch_once内部把block转换成函数然后调用dispatch_once_f。123456789101112131415">
 <meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2017-12-10T00:42:34.000Z">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="iOS笔记">
+<meta name="twitter:title" content="dispatch_once源码分析二">
+<meta name="twitter:description" content="不知道，大家还记得if分支中的dispatch_once函数。如果没有看过上篇dispatch_once源码分析一，希望大家看我源码分析一后，再看这篇。首先，once.m中一共就两个函数。一个是dispatch_once，另一个是dispatch_once_f。其中dispatch_once内部把block转换成函数然后调用dispatch_once_f。123456789101112131415">
   
     <link rel="alternative" href="/atom.xml" title="iOS笔记" type="application/atom+xml">
   
@@ -142,36 +147,66 @@ ga('send', 'pageview');
             <canvas data-colors="#eaeaea" data-sectionHeight="100" data-contentId="js-content" id="myCanvas1" class="anm-canvas"></canvas>
           </div>
           <div id="js-content" class="content-ll">
-            
+            <article id="post-dispatch-once源码分析二" class="article article-type-post " itemscope itemprop="blogPost">
+  <div class="article-inner">
+    
+      <header class="article-header">
+        
   
+    <h1 class="article-title" itemprop="name">
+      dispatch_once源码分析二
+    </h1>
   
-    
-    
-      
-      
-      <section class="archives-wrap">
-        <div class="archive-year-wrap">
-          <a href="/archives/2017" class="archive-year">2017</a>
-        </div>
-        <div class="archives">
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2017/12/08/dispatch-once源码分析二/" class="archive-article-date">
+
+        
+        <a href="/2017/12/08/dispatch-once源码分析二/" class="archive-article-date">
   	<time datetime="2017-12-08T12:55:39.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2017-12-08</time>
 </a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2017/12/08/dispatch-once源码分析二/">dispatch_once源码分析二</a>
-    </h1>
-  
+        
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>不知道，大家还记得if分支中的dispatch_once函数。如果没有看过上篇<code>dispatch_once</code>源码分析一，希望大家看我源码分析一后，再看这篇。首先，once.m中一共就两个函数。一个是<code>dispatch_once</code>，另一个是<code>dispatch_once_f</code>。其中<code>dispatch_once</code>内部把block转换成函数然后调用<code>dispatch_once_f</code>。<br><figure class="highlight objc"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> _dispatch_once_waiter_s&#123;</span><br><span class="line">    <span class="keyword">volatile</span> <span class="keyword">struct</span> _dispatch_once_waiter_s *<span class="keyword">volatile</span> dow_next;</span><br><span class="line">    _dispatch_thread_semaphore_t dow_sema;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="meta">#define DISPATCH_ONCE_DONE ((struct _dispatch_once_waiter_s *)~0l)</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#ifdef __BLOCKS__</span></span><br><span class="line"><span class="keyword">void</span></span><br><span class="line"><span class="built_in">dispatch_once</span>(<span class="built_in">dispatch_once_t</span> *val, dispatch_block_t block)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">struct</span> Block_basic *bb = (<span class="keyword">void</span> *)block;</span><br><span class="line"></span><br><span class="line">    dispatch_once_f(val, block, (<span class="keyword">void</span> *)bb-&gt;Block_invoke);</span><br><span class="line">&#125;</span><br><span class="line"><span class="meta">#endif</span></span><br><span class="line"></span><br><span class="line">DISPATCH_NOINLINE</span><br><span class="line"><span class="keyword">void</span></span><br><span class="line">dispatch_once_f(<span class="built_in">dispatch_once_t</span> *val, <span class="keyword">void</span> *ctxt, dispatch_function_t func)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">struct</span> _dispatch_once_waiter_s * <span class="keyword">volatile</span> *vval =</span><br><span class="line">            (<span class="keyword">struct</span> _dispatch_once_waiter_s**)val;</span><br><span class="line">    <span class="keyword">struct</span> _dispatch_once_waiter_s dow = &#123; <span class="literal">NULL</span>, <span class="number">0</span> &#125;;</span><br><span class="line">    <span class="keyword">struct</span> _dispatch_once_waiter_s *tail, *tmp;</span><br><span class="line">    _dispatch_thread_semaphore_t sema;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (dispatch_atomic_cmpxchg(vval, <span class="literal">NULL</span>, &amp;dow)) &#123;</span><br><span class="line">        dispatch_atomic_acquire_barrier();</span><br><span class="line">        _dispatch_client_callout(ctxt, func);</span><br><span class="line"></span><br><span class="line">        dispatch_atomic_maximally_synchronizing_barrier();</span><br><span class="line">        <span class="comment">//dispatch_atomic_release_barrier(); // assumed contained in above</span></span><br><span class="line">        tmp = dispatch_atomic_xchg(vval, DISPATCH_ONCE_DONE);</span><br><span class="line">        tail = &amp;dow;</span><br><span class="line">        <span class="keyword">while</span> (tail != tmp) &#123;</span><br><span class="line">            <span class="keyword">while</span> (!tmp-&gt;dow_next) &#123;</span><br><span class="line">                _dispatch_hardware_pause();</span><br><span class="line">            &#125;</span><br><span class="line">            sema = tmp-&gt;dow_sema;</span><br><span class="line">            tmp = (<span class="keyword">struct</span> _dispatch_once_waiter_s*)tmp-&gt;dow_next;</span><br><span class="line">            _dispatch_thread_semaphore_signal(sema);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        dow.dow_sema = _dispatch_get_thread_semaphore();</span><br><span class="line">        <span class="keyword">for</span> (;;) &#123;</span><br><span class="line">            tmp = *vval;</span><br><span class="line">            <span class="keyword">if</span> (tmp == DISPATCH_ONCE_DONE) &#123;</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            dispatch_atomic_store_barrier();</span><br><span class="line">            <span class="keyword">if</span> (dispatch_atomic_cmpxchg(vval, tmp, &amp;dow)) &#123;</span><br><span class="line">                dow.dow_next = tmp;</span><br><span class="line">                _dispatch_thread_semaphore_wait(dow.dow_sema);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        _dispatch_put_thread_semaphore(dow.dow_sema);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p><code>block</code>参数就是我们平时写dispatch_once时候传递进去的block。在函数<code>dispatch_once_f</code>开头，声明了两个函数局部变量。其中，一个是vval，类型为<code>struct _dispatch_once_waiter_s * volatile *</code>,这里volatile是C语言的一个关键字，为了提醒编译器它后面所定义的变量随时都有可能改变，因此编译后的程序每次需要存储或读取这个变量的时候，都会直接从变量地址中读取数据。如果没有volatile关键字，则编译器可能优化读取和存储，可能暂时使用寄存器中的值，如果这个变量由别的程序更新了的话，将出现不一致的现象。<br><code>struct _dispatch_once_waiter_s</code>包括一个next指针和一个信号量。为什么要把val转化成二重指针？原因其实就是dispatch_atomic_cmpxchg(…)中的参数要求为poiter to integer or poiter，也就是指向整数的指针或者是指向指针的指针。 这里还需要知道把val强转为指针的指针，其作用就是把onceToken类型转成<code>dow *(dow:Dispatch_Once_Waiter,首字母)</code>。请看：<code>dispatch_once_t *val--&gt;onceToken此时计算机会任何onceToken是dispatch_once_t类型。经过struct _dispatch_once_waiter_s * volatile *vval =(struct _dispatch_once_waiter_s**)val这样类型转换后，vval--&gt;onceToken--&gt;??，会认为onceToken是个指向dow类型，??也就是下面if语句执行后的dow对象</code><br>下面的几个函数局部变量，就不需要解释了。if分支中判断vval为NULL就返回Ture，同时把vval指向dow，这个过程在汇编级别保障了线程安全(具体汇编指令为lock,大家可以打个符号断点查看)。if分支里<code>dispatch_atomic_acquire_barrier</code>为空，可以忽略。下面就调用block，然后就是上篇引用文章提到的TB大于TA，确保上篇中if判断出来时候，这个分支还没执行结束。执行完block后，把vval设置为<code>DISPATCH_ONCE_DONE</code>作为完成标记。最后，检查有没有等待线程，如果有，就是发信号量，进行唤醒。想问问大家，这里的信号量可不可以换成互斥锁？答案是不可以，原因大家可以goole关于锁的文章，后续我自己也会写一个关于锁的笔记。<code>_dispatch_hardware_pause();</code>这个语句是为了节省电量的。<br>上面我们把if分枝逻辑代码解释完了，现在我们就来解释else分支。首先，判断vval被标记为完成了，如果是的话就break,处理把信号量放会线程，返回。如果，不是，把当前的dow插入到链表头，等待信号量。dow链表和插入点看下图：<br>onceToken–&gt;dow0;插入dow1:onceToken–&gt;dow1–&gt;temp(dow0);</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><ol>
+<li>对于onceToken官方文档也说了，初始值必须为0。为初始化的静态局部变量在BBS段子，默认初始化为0.</li>
+<li>不要共用一个onceToken,来调用多次dispatch_once，如何嵌套调用，会导致死锁，如何非嵌套调用，会有一个block无法执行。<br>最后，如果哪位大神，觉得我那里理解不对，或者哪里没有写对。都可以发邮件给我：liangxiu.chen.cn@gmail.com。大家互相讨论学习，我也会第一时间改正我的笔记文章，谢谢！</li>
+</ol>
 
-        <div class="article-info info-on-right">
-          
+      
+
+      
+        <div class="page-reward">
+          <a href="javascript:;" class="page-reward-btn tooltip-top">
+            <div class="tooltip tooltip-east">
+            <span class="tooltip-item">
+              赏
+            </span>
+            <span class="tooltip-content">
+              <span class="tooltip-text">
+                <span class="tooltip-inner">
+                  <p class="reward-p"><i class="icon icon-quo-left"></i>给点辛苦费<i class="icon icon-quo-right"></i></p>
+                  <div class="reward-box">
+                    
+                    <div class="reward-box-item">
+                      <img class="reward-img" src="/assets/alipay.png">
+                      <span class="reward-type">支付宝</span>
+                    </div>
+                    
+                    
+                  </div>
+                </span>
+              </span>
+            </span>
+          </div>
+          </a>
+        </div>
+      
+    </div>
+    <div class="article-info article-info-index">
+      
+      
 	<div class="article-tag tagcloud">
 		<i class="icon-price-tags icon"></i>
 		<ul class="article-tag-list">
@@ -183,133 +218,106 @@ ga('send', 'pageview');
 		</ul>
 	</div>
 
-          
+      
 
+      
+
+      
+        
+<div class="share-btn share-icons tooltip-left">
+  <div class="tooltip tooltip-east">
+    <span class="tooltip-item">
+      <a href="javascript:;" class="share-sns share-outer">
+        <i class="icon icon-share"></i>
+      </a>
+    </span>
+    <span class="tooltip-content">
+      <div class="share-wrap">
+        <div class="share-icons">
+          <a class="weibo share-sns" href="javascript:;" data-type="weibo">
+            <i class="icon icon-weibo"></i>
+          </a>
+          <a class="weixin share-sns wxFab" href="javascript:;" data-type="weixin">
+            <i class="icon icon-weixin"></i>
+          </a>
+          <a class="qq share-sns" href="javascript:;" data-type="qq">
+            <i class="icon icon-qq"></i>
+          </a>
+          <a class="douban share-sns" href="javascript:;" data-type="douban">
+            <i class="icon icon-douban"></i>
+          </a>
+          <a class="qzone share-sns" href="javascript:;" data-type="qzone">
+            <i class="icon icon-qzone"></i>
+          </a>
+          <a class="facebook share-sns" href="javascript:;" data-type="facebook">
+            <i class="icon icon-facebook"></i>
+          </a>
+          <a class="twitter share-sns" href="javascript:;" data-type="twitter">
+            <i class="icon icon-twitter"></i>
+          </a>
+          <a class="google share-sns" href="javascript:;" data-type="google">
+            <i class="icon icon-google"></i>
+          </a>
         </div>
-        <div class="clearfix"></div>
-    </header>
+      </div>
+    </span>
+  </div>
+</div>
+
+<div class="page-modal wx-share js-wx-box">
+    <a class="close js-modal-close" href="javascript:;"><i class="icon icon-close"></i></a>
+    <p>扫一扫，分享到微信</p>
+    <div class="wx-qrcode">
+      <img src="//pan.baidu.com/share/qrcode?url=http://yoursite.com/2017/12/08/dispatch-once源码分析二/" alt="微信分享二维码">
+    </div>
+</div>
+
+<div class="mask js-mask"></div>
+      
+      <div class="clearfix"></div>
+    </div>
   </div>
 </article>
+
   
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2017/12/05/dispatch-once源码分析一/" class="archive-article-date">
-  	<time datetime="2017-12-05T01:42:23.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2017-12-05</time>
-</a>
+<nav id="article-nav">
+  
+  
+    <a href="/2017/12/05/dispatch-once源码分析一/" id="article-nav-older" class="article-nav-link-wrap">
+      <div class="article-nav-title">dispatch_once源码分析一</div>
+      <i class="icon-circle-right"></i>
+    </a>
+  
+</nav>
+
+
+<aside class="wrap-side-operation">
+    <div class="mod-side-operation">
+        
+        <div class="jump-container" id="js-jump-container" style="display:none;">
+            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
+                <i class="icon-font icon-back"></i>
+            </a>
+            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
+                <i class="icon-font icon-plane jump-plane"></i>
+            </div>
         </div>
-    	 
+        
+        
+    </div>
+</aside>
+
+
+
   
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2017/12/05/dispatch-once源码分析一/">dispatch_once源码分析一</a>
-    </h1>
+  
   
 
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">iOS</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2017/11/30/synchronized内部解析/" class="archive-article-date">
-  	<time datetime="2017-11-30T02:51:20.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2017-11-30</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2017/11/30/synchronized内部解析/">@synchronized内部解析</a>
-    </h1>
   
 
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">iOS</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2017/11/23/performSelector-造成内存泄漏的原因/" class="archive-article-date">
-  	<time datetime="2017-11-23T10:12:48.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2017-11-23</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2017/11/23/performSelector-造成内存泄漏的原因/">performSelector 造成内存泄漏的原因</a>
-    </h1>
   
 
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">iOS</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
   
-  
-    </div></section>
-  
-
-    
 
 
           </div>
@@ -332,9 +340,9 @@ ga('send', 'pageview');
 	var yiliaConfig = {
 		mathjax: false,
 		isHome: false,
-		isPost: false,
+		isPost: true,
 		isArchive: false,
-		isTag: true,
+		isTag: false,
 		isCategory: false,
 		open_in_new: false,
 		toc_hide_index: true,

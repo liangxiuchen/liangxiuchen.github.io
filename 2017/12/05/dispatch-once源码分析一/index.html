@@ -16,7 +16,7 @@
 <meta property="og:site_name" content="iOS笔记">
 <meta property="og:description" content="最近，在学习GCD源码部分，咋一看感觉dispath_once部分内容少点，于是想着先来捏个软柿子。诶～人艰不拆啊！现在发现GCD部分都是精华，并无软柿子。人贵坚持，曾经看过一篇博文，作者写到技术的成长从来不是一蹴而就，知识体系的庞大到让你感觉自己就是一个无知者，即使你已经在苦海中遨游许久。但是，请你不要惧怕无知，因为你的无知，所以你在进步。首先，自己浏览了一遍dispatch_once实现的源代">
 <meta property="og:locale" content="zh-CN">
-<meta property="og:updated_time" content="2017-12-05T03:26:04.000Z">
+<meta property="og:updated_time" content="2017-12-10T00:51:02.000Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="dispatch_once源码分析一">
 <meta name="twitter:description" content="最近，在学习GCD源码部分，咋一看感觉dispath_once部分内容少点，于是想着先来捏个软柿子。诶～人艰不拆啊！现在发现GCD部分都是精华，并无软柿子。人贵坚持，曾经看过一篇博文，作者写到技术的成长从来不是一蹴而就，知识体系的庞大到让你感觉自己就是一个无知者，即使你已经在苦海中遨游许久。但是，请你不要惧怕无知，因为你的无知，所以你在进步。首先，自己浏览了一遍dispatch_once实现的源代">
@@ -90,6 +90,8 @@ ga('send', 'pageview');
 				
 					<a class="github" target="_blank" href="https://github.com/liangxiuchen" title="github"><i class="icon-github"></i></a>
 		        
+					<a class="mail" target="_blank" href="mailto:liangxiu.chen.cn@gmail.com" title="mail"><i class="icon-mail"></i></a>
+		        
 			</div>
 		</nav>
 	</header>		
@@ -122,6 +124,8 @@ ga('send', 'pageview');
 				<div class="social">
 					
 						<a class="github" target="_blank" href="https://github.com/liangxiuchen" title="github"><i class="icon-github"></i></a>
+			        
+						<a class="mail" target="_blank" href="mailto:liangxiu.chen.cn@gmail.com" title="mail"><i class="icon-mail"></i></a>
 			        
 				</div>
 			</nav>
@@ -163,7 +167,7 @@ ga('send', 'pageview');
     
     <div class="article-entry" itemprop="articleBody">
       
-        <p>最近，在学习GCD源码部分，咋一看感觉dispath_once部分内容少点，于是想着先来捏个软柿子。诶～人艰不拆啊！现在发现GCD部分都是精华，并无软柿子。人贵坚持，曾经看过一篇博文，作者写到技术的成长从来不是一蹴而就，知识体系的庞大到让你感觉自己就是一个无知者，即使你已经在苦海中遨游许久。但是，请你不要惧怕无知，因为你的无知，所以你在进步。首先，自己浏览了一遍dispatch_once实现的源代码，发现好多宏，都不知道具体含义。即使，自己也正在回顾汇编和体系结构相关内容。于是乎，Google了一下，<a href="http://www.dreamingwish.com/article/gcd-guide-dispatch-once-1.html" target="_blank" rel="noopener">GCD外传：dispatch_once(上中下)</a>写的真心好。仔细研读后，写下学习笔记，补充解释下一些作者未提及的细节。所以请大家读完后，如果有哪里没解释仔细的，也可以再阅读参考文章。同时，我也会把参考的文章链接，放在最后的引用部分。</p>
+        <p>最近，在学习GCD源码部分，咋一看感觉dispath_once部分内容少点，于是想着先来捏个软柿子。诶～人艰不拆啊！现在发现GCD部分都是精华，并无软柿子。人贵坚持，曾经看过一篇博文，作者写到技术的成长从来不是一蹴而就，知识体系的庞大到让你感觉自己就是一个无知者，即使你已经在苦海中遨游许久。但是，请你不要惧怕无知，因为你的无知，所以你在进步。首先，自己浏览了一遍dispatch_once实现的源代码，发现好多宏，都不知道具体含义。即使，自己也正在回顾汇编和体系结构相关内容。于是乎，Google了一下，<a href="https://www.mikeash.com/pyblog/friday-qa-2014-06-06-secrets-of-dispatch_once.html" target="_blank" rel="noopener">secrets-of-dispatch_once</a>。仔细研读后，写下学习笔记，补充解释下一些作者未提及的细节。所以请大家读完后，如果有哪里没解释仔细的，也可以再阅读参考文章。同时，我也会把参考的文章链接，放在最后的引用部分。</p>
 <h2 id="dispatch-once宏解密"><a href="#dispatch-once宏解密" class="headerlink" title="dispatch_once宏解密"></a>dispatch_once宏解密</h2><p>当我们在使用dispatch_once的时候，不知道，大家有没有点击进去看过这个宏的具体实现。其实这个宏的里面就有好多精华。</p>
 <figure class="highlight objc"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//删除了一些干扰</span></span><br><span class="line"><span class="meta">#define dispatch_once _dispatch_once</span></span><br><span class="line"></span><br><span class="line">DISPATCH_INLINE DISPATCH_ALWAYS_INLINE DISPATCH_NONNULL_ALL DISPATCH_NOTHROW</span><br><span class="line"><span class="keyword">void</span> _<span class="built_in">dispatch_once</span>(<span class="built_in">dispatch_once_t</span> *predicate,</span><br><span class="line">        DISPATCH_NOESCAPE dispatch_block_t block)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">if</span> (DISPATCH_EXPECT(*predicate, ~<span class="number">0</span>l) != ~<span class="number">0</span>l) &#123;</span><br><span class="line">        <span class="built_in">dispatch_once</span>(predicate, block);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        dispatch_compiler_barrier();</span><br><span class="line">    &#125;</span><br><span class="line">    DISPATCH_COMPILER_CAN_ASSUME(*predicate == ~<span class="number">0</span>l);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 <ol>
@@ -179,7 +183,7 @@ ga('send', 'pageview');
 <p>要保证足够的等待时间，需要一些trick。在intel的CPU上，dispatch_once动用了cpuid指令来达成这个目的。cpuid本来是用作取得cpu的信息，但是这个指令也同时强制将指令流串行化，并且这个指令是需要比较长的执行时间的（在某些cpu上，甚至需要几百圈cpu时钟），这个时间Tc足够超过Ta了<br>查看dispatch_once读取端代码片段<br><figure class="highlight objc"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">DISPATCH_INLINE DISPATCH_ALWAYS_INLINE DISPATCH_NONNULL_ALL DISPATCH_NOTHROW</span><br><span class="line"><span class="keyword">void</span></span><br><span class="line">_<span class="built_in">dispatch_once</span>(<span class="built_in">dispatch_once_t</span> *predicate, dispatch_block_t block)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">if</span> (DISPATCH_EXPECT(*predicate, ~<span class="number">0</span>l) != ~<span class="number">0</span>l) &#123;</span><br><span class="line">        <span class="built_in">dispatch_once</span>(predicate, block);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
 <p>没有barrier，并且这个代码是在头文件中的，是强制inline的，DISPATCH_EXPECT是用来告诉cpu *predicate等于~0l是更有可能的判定结果，这就使得cpu能猜测到更正确的分支，并提高效率，最重要的是，这一句是个简单的if判定语句，负载无限接近benchmark。<br>在写入端，dispatch_once在执行了block之后，会调用dispatch_atomic_maximally_synchronizing_barrier();宏函数，在intel处理器上，这个函数编译出的是cpuid指令，在其他厂商处理器上，这个宏函数编译出的是合适的其它指令。<br>如此一来，dispatch_once就保证了场景#3的执行速度无限接近benchmark，实现了写入端的最低负载。</p>
 <h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>整体内容，很值得细细推敲，认真研读。就我个人而言，研究下来收获还挺多了的。对于，多线程编程，我们也可以用到，这些宏来优化自身代码。下一篇，将会分析dispatch_once函数的具体实现</p>
-<h2 id="引用"><a href="#引用" class="headerlink" title="引用"></a>引用</h2><p>GCD外传：<a href="http://www.dreamingwish.com/article/gcd-guide-dispatch-once-1.html" target="_blank" rel="noopener">http://www.dreamingwish.com/article/gcd-guide-dispatch-once-1.html</a></p>
+<h2 id="引用"><a href="#引用" class="headerlink" title="引用"></a>引用</h2><p>secrets-of-dispatch_once：<a href="https://www.mikeash.com/pyblog/friday-qa-2014-06-06-secrets-of-dispatch_once.html" target="_blank" rel="noopener">https://www.mikeash.com/pyblog/friday-qa-2014-06-06-secrets-of-dispatch_once.html</a><br>中文翻译：<a href="http://www.dreamingwish.com/article/gcd-guide-dispatch-once-1.html" target="_blank" rel="noopener">http://www.dreamingwish.com/article/gcd-guide-dispatch-once-1.html</a></p>
 
       
 
@@ -288,6 +292,15 @@ ga('send', 'pageview');
 
   
 <nav id="article-nav">
+  
+    <a href="/2017/12/08/dispatch-once源码分析二/" id="article-nav-newer" class="article-nav-link-wrap">
+      <i class="icon-circle-left"></i>
+      <div class="article-nav-title">
+        
+          dispatch_once源码分析二
+        
+      </div>
+    </a>
   
   
     <a href="/2017/11/30/synchronized内部解析/" id="article-nav-older" class="article-nav-link-wrap">
